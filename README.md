@@ -3,17 +3,18 @@
 Broken down into sections, depending on code base:
 
 ## Python
-Simple CLI tool that:
-- automatically detects the local network range
-- runs an `nmap` ping scan (`-sn`) on a target range
-- parses discovered device IPs and hostnames
-- asks you to guess how many devices are up
-- reveals the result and lists discovered devices
+Simple Web App
+- automatically detects and imports modules in the `modules` folder
+- runs the discovered modules to generate questiosn in the `output` folder
+- serves a simple web page to display the generated questions
+- generates a report in the `reports` folder with the results of the quiz
+
+Information on how modules are structured and how to create new ones can be found in `src/runners/README.md` and example modules can be found in the `modules` folder.
 
 ### Prerequisites
 
 - Python 3.12+
-- `nmap` installed and available on your `PATH`
+- `nmap` installed and available on your `PATH` for the `count_devices` module.
 
 ### Run
 
@@ -22,6 +23,7 @@ python3 main.py
 ```
 
 You can enter a custom target network/range (for example `192.168.1.0/24`) or press Enter to use the default.
+
 
 ## Java
 Works using Springboot and Vaadin, creates a simple website, that uses localhost:8080 for asking the user some questions, populated by the Python call to get the information installed on the device.
