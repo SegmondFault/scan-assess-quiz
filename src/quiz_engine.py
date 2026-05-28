@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -9,13 +10,14 @@ class QuizSession:
             questions, key=lambda q: (q.get("tree_id", 0), q.get("q_id", 0))
         )
         self.question_by_id = {
-            f"{q.get("tree_id")}_{q.get("q_id")}": q
+            f"{q.get('tree_id')}_{q.get('q_id')}": q
             for q in self.questions
             if q.get("q_id") is not None and q.get("tree_id") is not None
         }
         self.categories = self._discover_categories()
         self.scores = {c: 50 for c in self.categories}
         self.recommendations: list[str] = []
+        self.answer_records: list[dict] = []
         self.asked_count = 0
         self.current_index = 0
         self.current_question = self.questions[0] if self.questions else None
@@ -71,6 +73,7 @@ class QuizSession:
     def apply_answer(self, answer: dict) -> None:
         if not self.current_question:
             return
+        answered_question = self.current_question
         self.asked_count += 1
 
         # Apply score change and recommendations
@@ -78,6 +81,20 @@ class QuizSession:
         rec = answer.get("recommendations")
         if rec:
             self.recommendations.append(rec)
+        self.answer_records.append(
+            {
+                "tree_id": answered_question.get("tree_id"),
+                "q_id": answered_question.get("q_id"),
+                "question": answered_question.get("label", ""),
+                "source_module": answered_question.get("source_module"),
+                "source_file": answered_question.get("source_file"),
+                "observed_item": answered_question.get("observed_item"),
+                "context_kind": answered_question.get("context_kind"),
+                "selected_answer": answer.get("label", ""),
+                "score_delta": answer.get("score", {}),
+                "recommendation": rec,
+            }
+        )
 
         # Check if max questions reached
         if self.asked_count >= self.max_questions:
@@ -98,12 +115,13 @@ class QuizSession:
         )
 
     def generate_report(self, report_dir: Path) -> Path:
+        generated_at = datetime.now()
         report_file = (
-            report_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            report_dir / f"report_{generated_at.strftime('%Y%m%d_%H%M%S')}.md"
         )
         with report_file.open("w", encoding="utf-8") as f:
             f.write(
-                f"# Quiz report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"# Quiz report - {generated_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             )
             f.write("## Scores\n\n")
             for k, v in sorted(self.scores.items(), key=lambda x: -x[1]):
@@ -112,4 +130,32 @@ class QuizSession:
                 f.write("\n## Recommendations\n\n")
                 for r in self.recommendations:
                     f.write(f"- {r}\n")
+            if self.answer_records:
+                f.write("\n## Answered Context\n\n")
+                for item in self.answer_records:
+                    source = item.get("source_module") or "quiz"
+                    observed = item.get("observed_item") or "general context"
+                    f.write(
+                        f"- **{source}** / {observed}: {item.get('selected_answer', '')}\n"
+                    )
+        json_file = report_file.with_suffix(".json")
+        json_file.write_text(
+            json.dumps(
+                {
+                    "module": "ngo-socio-tech-telemetry",
+                    "generated_at": generated_at.isoformat(),
+                    "scores": self.scores,
+                    "recommendations": self.recommendations,
+                    "answers": self.answer_records,
+                    "provenance": {
+                        "data_origin": "operator_supplied",
+                        "collection_method": "interactive_quiz",
+                        "sensitivity": "work_context",
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
         return report_file
